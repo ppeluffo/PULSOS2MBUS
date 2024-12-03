@@ -1,11 +1,15 @@
 
 #include "modbus_slave.h"
 
-bool modbus_debug;
-uint8_t mbus_fsm_state;
-uint8_t mbus_local_address;
-modbus_slave_CONTROL_BLOCK_t mbus_cb;
-counter_value_t contador;
+/*
+ * CAUDAL:      addr=0x01, FLOAT (4 bytes)
+ * PULSOSxMIN:  addr=0x02, U16 (2bytes)
+ * PULSOSxHORA: addr=0x03, U32 (4 bytes)
+ * 
+ * https://baseconvert.com/ieee-754-floating-point
+ * 
+ */
+counter_value_t lcontador;
 
 //------------------------------------------------------------------------------
 void modbus_slave_config_debug(bool debug)
@@ -22,14 +26,37 @@ void modbus_slave_fsm_init(void)
 
 }
 //------------------------------------------------------------------------------
-void modbus_slave_fsm(char c)
+void modbus_slave_fsm(uint8_t c)
 {
       
+    /*
+     *  DEBUG:
+     *  Hago loopback
+     */
+    //xfputChar(fdRS485, c);
+    //xprintf_P(PSTR("DEBUG:[%d]\r\n"),c);
+    //return;
+    
     // Almaceno.
     if ( ! lBchar_Put(&mbslave_rx_lbuffer, c) ) {
         lBchar_Flush(&mbslave_rx_lbuffer);
         return;
     }
+    
+    
+ //   if (modbus_debug) {
+ //       xprintf_P(PSTR("%d[0x%02X] "), lBchar_GetCount(&mbslave_rx_lbuffer), c);
+ //   }
+    
+    /*
+    if ( lBchar_GetCount(&mbslave_rx_lbuffer) == 8 ) {
+        modbus_slave_print_rx_buffer();
+        lBchar_Flush(&mbslave_rx_lbuffer);   
+    }
+    return;
+     */
+    
+    //xprintf_P(PSTR("X: %d, %d\r\n"),mbus_fsm_state,c );
     
     // Ejecuto.
     switch(mbus_fsm_state) {
@@ -42,14 +69,15 @@ void modbus_slave_fsm(char c)
                 // Inicializo
                 lBchar_Flush(&mbslave_rx_lbuffer);
                 lBchar_Put(&mbslave_rx_lbuffer, c);
-                mbus_fsm_state = FCN_CODE;   
+                mbus_fsm_state = FCN_CODE;
+                //xprintf_P(PSTR("DEBUG: init\r\n"));
             }
             break;
             
         case FCN_CODE:
             // Solo proceso los frames 3 y 6. El resto los descarto
             // Ya los guarde en el buffer al entrar.
-            if ( ( c == 0x03) || ( c == 0x06 ) ) {
+            if ( c == 0x03 ) {
                 mbus_fsm_state = IN_FRAME;
             } else {
                 // Function codes no implementados
@@ -84,6 +112,9 @@ void modbus_slave_process_frame(void)
 uint16_t crc_rcvd;
 uint16_t crc_calculated;
     
+
+    //portDISABLE_INTERRUPTS();
+    
     if (modbus_debug ) {
         xprintf_P(PSTR("MODBUS_fsm_process_frame\r\n"));
     }
@@ -94,8 +125,8 @@ uint16_t crc_calculated;
     
     if ( crc_rcvd != crc_calculated ) {
         xprintf_P(PSTR("MBUS RCVD CRC ERROR\r\n"));
-        xprintf_P(PSTR("CRC_RX=0x%04x, CRC_CALC=0x%04x\r\n"), crc_rcvd, crc_calculated);
-        xprintf_P(PSTR("CRC1=0x%02x, CRC2=0x%02x\r\n"), mbslave_rx_array[6], mbslave_rx_array[7]);
+        xprintf_P(PSTR("CRC_RX=0x%04X, CRC_CALC=0x%04X\r\n"), crc_rcvd, crc_calculated);
+        xprintf_P(PSTR("CRC1=0x%02X, CRC2=0x%02x\r\n"), mbslave_rx_array[6], mbslave_rx_array[7]);
         modbus_slave_print_rx_buffer();
         lBchar_Flush(&mbslave_rx_lbuffer);
         return;
@@ -107,6 +138,7 @@ uint16_t crc_calculated;
             modbus_slave_process_frame03();
             break;
         default:
+            //portENABLE_INTERRUPTS();
             xprintf_P(PSTR("MODBUS FCODE ERROR (0x%02x)\r\n"), mbslave_rx_array[1] );
             break;
     }
@@ -125,40 +157,99 @@ uint16_t nro_regs;
 uint8_t size = 0;
 uint16_t crc;
 
-    if (modbus_debug) {
-        xprintf_P(PSTR("MODBUS_fsm_process_frame03\r\n"));
-        modbus_slave_print_rx_buffer();
-    }
+    //if (modbus_debug) {
+    //    xprintf_P(PSTR("MODBUS_fsm_process_frame03\r\n"));
+    //    modbus_slave_print_rx_buffer();
+    //}
    
     reg_address = mbslave_rx_array[2] << 8 | mbslave_rx_array[3];
     nro_regs = mbslave_rx_array[4] << 8 | mbslave_rx_array[5];
     
-    if (modbus_debug ) {
-        xprintf_P(PSTR("reg_addr=%u, nro_regs=%u\r\n"), reg_address, nro_regs);
-    }
+    //if (modbus_debug ) {
+    //    xprintf_P(PSTR("reg_addr=%u, nro_regs=%u\r\n"), reg_address, nro_regs);
+    //}
         
-    if (reg_address == 0x1) {
-        
-        // El reg01 el el valor del contador (float), 4 bytes
-        contador = counter_read();
-        mbus_cb.udata.float_value = contador.caudal;
-
-        mbus_cb.tx_buffer[0] = mbus_local_address;     // [0xFE]
-        mbus_cb.tx_buffer[1] = 0x3;                    // FCODE=0x03
-        mbus_cb.tx_buffer[2] = 0x4;                    // Byte count ( 4 bytes )
-        
-        mbus_cb.tx_buffer[3] = mbus_cb.udata.raw_value[0];
-        mbus_cb.tx_buffer[4] = mbus_cb.udata.raw_value[1];
-        mbus_cb.tx_buffer[5] = mbus_cb.udata.raw_value[2];
-        mbus_cb.tx_buffer[6] = mbus_cb.udata.raw_value[3];   
-        
-        size = 7;
-        crc = crc16( mbus_cb.tx_buffer, size );
-        mbus_cb.tx_buffer[size++] = (uint8_t)( crc & 0x00FF );			// CRC Low
-        mbus_cb.tx_buffer[size++] = (uint8_t)( (crc & 0xFF00) >> 8 );	// CRC High
-        mbus_cb.tx_size = size;
+    counter_read(&lcontador);
     
-        modbus_slave_txmit_ADU( &mbus_cb );
+    switch( reg_address ) {
+        case 1:
+            //if (modbus_debug) {
+            //    xprintf_P(PSTR("MODBUS_fsm_process_frame03:001\r\n"));
+            //}
+            // El reg01 el el valor del contador (float), 4 bytes
+            mbus_cb.udata.float_value = lcontador.caudal;
+            //mbus_cb.udata.float_value = 38.4;
+            
+            mbus_cb.tx_buffer[0] = mbus_local_address;     // [0xFE]
+            mbus_cb.tx_buffer[1] = 0x3;                    // FCODE=0x03
+            mbus_cb.tx_buffer[2] = 0x4;                    // Byte count ( 4 bytes )
+        
+            mbus_cb.tx_buffer[3] = mbus_cb.udata.raw_value[3];
+            mbus_cb.tx_buffer[4] = mbus_cb.udata.raw_value[2];
+            mbus_cb.tx_buffer[5] = mbus_cb.udata.raw_value[1];
+            mbus_cb.tx_buffer[6] = mbus_cb.udata.raw_value[0];   
+        
+            size = 7;
+            crc = crc16( mbus_cb.tx_buffer, size );
+            mbus_cb.tx_buffer[size++] = (uint8_t)( crc & 0x00FF );			// CRC Low
+            mbus_cb.tx_buffer[size++] = (uint8_t)( (crc & 0xFF00) >> 8 );	// CRC High
+            mbus_cb.tx_size = size;
+            modbus_slave_txmit_ADU( &mbus_cb );
+            break;
+            
+        case 2:
+            //if (modbus_debug) {
+            //    xprintf_P(PSTR("MODBUS_fsm_process_frame03:002\r\n"));
+            //}
+            // reg02 tiene el valor de pulsoXminuto ( u16), 2bytes
+            mbus_cb.udata.u32_value = lcontador.pulsosXmin;
+            //mbus_cb.udata.u16_value = 11325;
+
+            mbus_cb.tx_buffer[0] = mbus_local_address;     // [0xFE]
+            mbus_cb.tx_buffer[1] = 0x3;                    // FCODE=0x03
+            mbus_cb.tx_buffer[2] = 0x4;                    // Byte count ( 4 bytes )
+        
+            mbus_cb.tx_buffer[3] = mbus_cb.udata.raw_value[3];
+            mbus_cb.tx_buffer[4] = mbus_cb.udata.raw_value[2];
+            mbus_cb.tx_buffer[5] = mbus_cb.udata.raw_value[1];
+            mbus_cb.tx_buffer[6] = mbus_cb.udata.raw_value[0];   
+        
+            size = 7;
+            crc = crc16( mbus_cb.tx_buffer, size );
+            mbus_cb.tx_buffer[size++] = (uint8_t)( crc & 0x00FF );			// CRC Low
+            mbus_cb.tx_buffer[size++] = (uint8_t)( (crc & 0xFF00) >> 8 );	// CRC High
+            mbus_cb.tx_size = size;
+            modbus_slave_txmit_ADU( &mbus_cb );
+            break;
+           
+        case 3:
+            //if (modbus_debug) {
+            //    xprintf_P(PSTR("MODBUS_fsm_process_frame03:003\r\n"));
+            //}
+            // El reg03 el el valor del pulsesXhora (U32), 4 bytes
+            mbus_cb.udata.u32_value = lcontador.pulsosXhora;
+            //mbus_cb.udata.u32_value = 39280;
+            
+            mbus_cb.tx_buffer[0] = mbus_local_address;     // [0xFE]
+            mbus_cb.tx_buffer[1] = 0x3;                    // FCODE=0x03
+            mbus_cb.tx_buffer[2] = 0x4;                    // Byte count ( 4 bytes )
+        
+            mbus_cb.tx_buffer[3] = mbus_cb.udata.raw_value[3];
+            mbus_cb.tx_buffer[4] = mbus_cb.udata.raw_value[2];
+            mbus_cb.tx_buffer[5] = mbus_cb.udata.raw_value[1];
+            mbus_cb.tx_buffer[6] = mbus_cb.udata.raw_value[0];   
+        
+            size = 7;
+            crc = crc16( mbus_cb.tx_buffer, size );
+            mbus_cb.tx_buffer[size++] = (uint8_t)( crc & 0x00FF );			// CRC Low
+            mbus_cb.tx_buffer[size++] = (uint8_t)( (crc & 0xFF00) >> 8 );	// CRC High
+            mbus_cb.tx_size = size;
+            modbus_slave_txmit_ADU( &mbus_cb );
+            break;
+          
+        default:
+            break;
+         
     }
     
     return;
@@ -179,19 +270,24 @@ uint8_t i;
    
 	// Transmito
 	// borro buffers y espero 3.5T (9600) = 3.5ms ( START )
-	vTaskDelay( ( TickType_t)( 10 / portTICK_PERIOD_MS ) );
+	//vTaskDelay( ( TickType_t)( 10 / portTICK_PERIOD_MS ) );
 
+    	// La funcion xnprintf_MBUS maneja el control de flujo.
+	i = xnprintf( fdRS485, (const char *)mbus_cb->tx_buffer, mbus_cb->tx_size );
+    
+    //portENABLE_INTERRUPTS();
+    
     if (modbus_debug) {
-        xprintf_P(PSTR("MODBUS_txmit_ADU\r\n"));
-        xprintf_P( PSTR("len=%d\r\n"), mbus_cb->tx_size);
+        modbus_slave_print_rx_buffer();
+        
+        xprintf_P( PSTR("TXMT(%d):"), mbus_cb->tx_size);
 		for ( i = 0 ; i < mbus_cb->tx_size ; i++ ) {
 			xprintf_P( PSTR("[0x%02X]"), mbus_cb->tx_buffer[i]);
 		}
 		xprintf_P( PSTR("\r\n"));
         
     }
-	// La funcion xnprintf_MBUS maneja el control de flujo.
-	i = xnprintf( fdRS485_MODBUS, (const char *)mbus_cb->tx_buffer, mbus_cb->tx_size );
+
 
 }
 //------------------------------------------------------------------------------
@@ -246,4 +342,15 @@ int i;
 	return crc;
 }
 //------------------------------------------------------------------------------
-
+uint16_t modbus_count(void)
+{
+    return (lBchar_GetCount(&mbslave_rx_lbuffer));
+    
+}
+//------------------------------------------------------------------------------
+void modbus_debug_read(void)
+{
+    modbus_slave_print_rx_buffer();
+    lBchar_Flush(&mbslave_rx_lbuffer);
+}
+//------------------------------------------------------------------------------

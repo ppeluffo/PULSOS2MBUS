@@ -35,7 +35,6 @@
 typedef enum {
 	fdTERM = 0,  
     fdRS485,
-    fdRS485_MODBUS,
     fdNVM
          
 } file_descriptor_t;
@@ -96,8 +95,7 @@ int16_t frtos_open_nvm( periferico_nvm_t *xNVM, file_descriptor_t fd, StaticSema
 
 int16_t frtos_write( file_descriptor_t fd ,const char *pvBuffer, const uint16_t xBytes );
 int16_t frtos_write_uart0( const char *pvBuffer, const uint16_t xBytes );
-int16_t frtos_write_uart4( const char *pvBuffer, const uint16_t xBytes );
-int16_t frtos_write_uart4_modbus( const char *pvBuffer, const uint16_t xBytes );
+int16_t frtos_write_uart4_rs485( const char *pvBuffer, const uint16_t xBytes );
 int16_t frtos_write_nvm( periferico_nvm_t *xNVM, const char *pvBuffer, const uint16_t xBytes );
 
 int16_t frtos_ioctl( file_descriptor_t fd, uint32_t ulRequest, void *pvValue );

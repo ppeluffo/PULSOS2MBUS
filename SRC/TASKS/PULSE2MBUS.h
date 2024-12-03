@@ -78,7 +78,7 @@ extern "C" {
 #include "pines.h"
 
 #define FW_REV "1.0.0"
-#define FW_DATE "@ 20241028"
+#define FW_DATE "@ 20241029"
 #define HW_MODELO "PULSOS2MBUS FRTOS R001 HW:AVR128DA64"
 #define FRTOS_VERSION "FreeRTOS V202111.00"
 #define FW_TYPE "PULSOS2MBUS"
@@ -88,10 +88,14 @@ extern "C" {
 #define tkCtl_TASK_PRIORITY	 	( tskIDLE_PRIORITY + 1 )
 #define tkCmd_TASK_PRIORITY 	( tskIDLE_PRIORITY + 1 )
 #define tkRS485RX_TASK_PRIORITY ( tskIDLE_PRIORITY + 1 )
+#define tkSys_TASK_PRIORITY     ( tskIDLE_PRIORITY + 1 )
+#define tkLog_TASK_PRIORITY     ( tskIDLE_PRIORITY + 1 )
 
 #define tkCtl_STACK_SIZE		384
 #define tkCmd_STACK_SIZE		512
 #define tkRS485RX_STACK_SIZE	384
+#define tkSys_STACK_SIZE		384
+#define tkLog_STACK_SIZE		384
 
 StaticTask_t tkCtl_Buffer_Ptr;
 StackType_t tkCtl_Buffer [tkCtl_STACK_SIZE];
@@ -102,15 +106,23 @@ StackType_t tkCmd_Buffer [tkCmd_STACK_SIZE];
 StaticTask_t tkRS485RX_Buffer_Ptr;
 StackType_t tkRS485RX_Buffer [tkRS485RX_STACK_SIZE];
 
+StaticTask_t tkSys_Buffer_Ptr;
+StackType_t tkSys_Buffer [tkSys_STACK_SIZE];
+
+StaticTask_t tkLog_Buffer_Ptr;
+StackType_t tkLog_Buffer [tkLog_STACK_SIZE];
+
 SemaphoreHandle_t sem_SYSVars;
 StaticSemaphore_t SYSVARS_xMutexBuffer;
 
 #define MSTOTAKESYSVARSSEMPH ((  TickType_t ) 10 )
 
-TaskHandle_t xHandle_tkCtl, xHandle_tkCmd, xHandle_tkRS485RX;
+TaskHandle_t xHandle_tkCtl, xHandle_tkCmd, xHandle_tkSys, xHandle_tkLog, xHandle_tkRS485RX;
 
 void tkCtl(void * pvParameters);
+void tkSys(void * pvParameters);
 void tkCmd(void * pvParameters);
+void tkLog(void * pvParameters);
 void tkRS485RX(void * pvParameters);
 
 bool starting_flag;
@@ -142,13 +154,14 @@ bool u_config_debug( char *tipo, char *valor);
 void u_print_tasks_running(void);
 void u_config_termsense(void);
 uint8_t u_read_termsense(void);
+void pin_awake_config(void);
 
 // Mensajes entre tareas
 #define SIGNAL_FRAME_READY		0x01
 
 // Task running & watchdogs
-#define RUNNING_TASKS   2
-typedef enum { TK_CMD = 0, TK_RS485RX } t_wdg_ids;
+#define RUNNING_TASKS   4
+typedef enum { TK_CMD = 0, TK_RS485RX, TK_SYS, TK_LOG } t_wdg_ids;
 bool tk_running[RUNNING_TASKS];
 bool tk_watchdog[RUNNING_TASKS];
 

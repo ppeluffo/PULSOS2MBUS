@@ -15,7 +15,14 @@
 
 void pv_count_pulse(void);
 
-TaskHandle_t *l_xHandle_tkCtl;
+TaskHandle_t *xHandlePtr;
+
+// Cada minuto guardo los pulsos en un slot.
+#define PBUFFER_LENGTH 60
+uint8_t idx;
+uint16_t pbuffer[PBUFFER_LENGTH];
+uint16_t tmp_cnt;
+
 
 //------------------------------------------------------------------------------
 void counter_init_outofrtos( TaskHandle_t *xHandle )
@@ -27,7 +34,7 @@ void counter_init_outofrtos( TaskHandle_t *xHandle )
      * 
      */
     
-    l_xHandle_tkCtl = xHandle;
+    xHandlePtr = xHandle;
     // Los CNTx son inputs
     CNT0_PORT.DIR &= ~CNT0_PIN_bm;
     // Habilito a interrumpir, pullup, flanco de bajada.
@@ -37,6 +44,11 @@ void counter_init_outofrtos( TaskHandle_t *xHandle )
     sei();
     
     contador.fsm_ticks_count = 0;
+    for (idx=0; idx<PBUFFER_LENGTH; idx++) {
+        pbuffer[idx] = 0;
+    }
+    idx = 0;
+    tmp_cnt = 0;
 }
 // ----------------------------------------------------------------------------- 
 void counter_config_timerpoll( char *s_timerpoll)
@@ -54,9 +66,9 @@ uint8_t counter_read_pin(void)
     return ( ( CNT0_PORT.IN & CNT0_PIN_bm ) >> CNT0_PIN) ;
 }
 // -----------------------------------------------------------------------------
-counter_value_t counter_read(void)
+void counter_read(counter_value_t *cnt)
 {
-    return(contador);
+    memcpy( cnt, &contador, sizeof(counter_value_t));
 }
 // -----------------------------------------------------------------------------
 void counter_clear(void)
@@ -70,6 +82,38 @@ void counter_clear(void)
     */
     contador.caudal = 0.0;
     contador.pulsos = 0;
+}
+//------------------------------------------------------------------------------
+void counter_summarize(void)
+{
+    /*
+     * Esta función la invoca una base de tiempos 1 vez por minuto
+     * Guarda el valor de los pulsos en dicho minuto, y lo almacena en el
+     * buffer para tener los pulsos x hora.
+     */
+    
+uint8_t i;
+uint32_t pXh = 0;
+
+    // Guardo en el buffer de pulsosxhora los pulsos del ultimo minuto
+    pbuffer[idx] = tmp_cnt;
+    // Actualizo variables
+    contador.pulsosXmin = tmp_cnt;
+    tmp_cnt = 0;
+    
+    // Avanzo el puntero en modo circular
+    if ( ++idx == PBUFFER_LENGTH ) {
+        idx = 0;
+    }
+    
+    // Calculo la cantidad de pulsos en la ultima hora
+    for (i=0; i < PBUFFER_LENGTH; i++) {
+        pXh += pbuffer[i];
+    }
+    contador.pulsosXhora = pXh;
+    
+    xprintf_P(PSTR("SUMMARY: ppm=%lu, pph=%lu\r\n"), contador.pulsosXmin, contador.pulsosXhora);
+    
 }
 //------------------------------------------------------------------------------
 void pv_count_pulse(void)
@@ -87,6 +131,7 @@ BaseType_t xHigherPriorityTaskWoken = pdTRUE;
         return;
     }
     
+    tmp_cnt++;
     contador.pulsos++;
     contador.T_secs =  (float)(1.0 * contador.T_ticks);    // Duracion en ticks
     contador.T_secs /= configTICK_RATE_HZ;                 // Duracion en secs.
@@ -98,7 +143,7 @@ BaseType_t xHigherPriorityTaskWoken = pdTRUE;
         contador.caudal = 0.0;
     } 
             
-    xTaskNotifyFromISR( *l_xHandle_tkCtl,
+    xTaskNotifyFromISR( *xHandlePtr,
                        0x01,
                        eSetBits,
                        &xHigherPriorityTaskWoken );

@@ -42,16 +42,24 @@ typedef struct {
 uint8_t mbslave_rx_array[MBSLAVE_RX_BUFFER_SIZE];
 lBuffer_s mbslave_rx_lbuffer;
 
+bool modbus_debug;
+uint8_t mbus_fsm_state;
+uint8_t mbus_local_address;
+modbus_slave_CONTROL_BLOCK_t mbus_cb;
+
 typedef enum { FSM_IDLE=0, FCN_CODE, IN_FRAME } fsm_states_t;
 
 void modbus_slave_config_debug(bool debug);
 void modbus_slave_fsm_init(void);
-void modbus_slave_fsm(char c);
+void modbus_slave_fsm(uint8_t c);
 void modbus_slave_process_frame(void);
 void modbus_slave_print_rx_buffer(void);
 void modbus_slave_process_frame03(void);
 void modbus_slave_txmit_ADU( modbus_slave_CONTROL_BLOCK_t *mbus_cb );
 uint16_t crc16( uint8_t *msg, uint8_t msg_size );
+uint16_t modbus_count(void);
+void modbus_debug_read(void);
+
 
 #ifdef	__cplusplus
 }

@@ -12,6 +12,8 @@
 
 void sys_watchdog_check(void);
 void sys_daily_reset(void);
+void sys_check_awake(void);
+
 
 const char string_0[] PROGMEM = "TK_CMD";
 const char string_1[] PROGMEM = "TK_RS485RX";
@@ -25,7 +27,6 @@ void tkCtl(void * pvParameters)
 	// Esta es la primer tarea que arranca.
 
 ( void ) pvParameters;
-uint32_t ulNotificationValue;
 
 	vTaskDelay( ( TickType_t)( 500 / portTICK_PERIOD_MS ) );
     xprintf_P(PSTR("Starting tkCtl..\r\n"));
@@ -50,17 +51,28 @@ uint32_t ulNotificationValue;
         sys_watchdog_check();
         sys_daily_reset();       
         // Duerme 5 secs y corre.
-        //vTaskDelay( ( TickType_t)( 1000 / portTICK_PERIOD_MS ) );
-		//vTaskDelay( ( TickType_t)( 1000 * TKCTL_DELAY_S / portTICK_PERIOD_MS ) );
+		vTaskDelay( ( TickType_t)( 1000 * TKCTL_DELAY_S / portTICK_PERIOD_MS ) );
         // Estoy en tickless
-        ulNotificationValue = ulTaskNotifyTake(pdTRUE, ( TickType_t)( (1000 * TKCTL_DELAY_S) / portTICK_PERIOD_MS ));
-        
-        if( ( ulNotificationValue & 0x01 ) != 0 ) {
-            xprintf_P(PSTR("COUNTER: PULSOS=%d, CAUDAL=%0.3f, PW(secs)=%0.3f\r\n"), contador.pulsos, contador.caudal, contador.T_secs );
-            //xprintf_P(PSTR("COUNTER**: TNOW=%lu, PW(ticks)=%lu\r\n"),  contador.now_ticks,  contador.T_ticks );
-            /* Bit 0 was set - process whichever event is represented by bit 0. */        
-        }
+        //xnprintf( fdRS485, "Spymovil123\r\n", 13 );
+        sys_check_awake();
 	}
+}
+//------------------------------------------------------------------------------
+void sys_check_awake(void)
+{
+    /*
+     * Chequeo c/5 segs.
+     * Si el nivel es LOW: sleep
+     * Si el nivel eh HIGH: awake
+     * En caso de awake, envio una notificación a la tk_RX_485
+     */
+    
+    if (  READ_AWAKE_SENSE() == 0 ) {
+        RS485_SLEEP();
+    } else {
+        RS485_AWAKE();
+    }
+    
 }
 //------------------------------------------------------------------------------
 void sys_watchdog_check(void)
@@ -83,7 +95,7 @@ char strBuffer[15] = { '\0' } ;
      * 
      */
     wdt_reset();
-    //return;
+    return;
     
          
     /* EL wdg lo leo cada 240secs ( 5 x 60 )

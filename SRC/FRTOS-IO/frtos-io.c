@@ -34,11 +34,6 @@ int16_t xRet = -1;
         xRet=0;
 		break;
         
-    case fdRS485_MODBUS:
-		frtos_open_uart4( flags );
-        xRet=0;
-		break;
-        
     case fdNVM:
 		xRet = frtos_open_nvm( &xNVM, fd, &NVM_xMutexBuffer, flags );
 		break;
@@ -65,10 +60,6 @@ int16_t xRet = -1;
         case fdRS485:
             xRet = frtos_ioctl_uart4( ulRequest, pvValue );
             break;
-
-        case fdRS485_MODBUS:
-            xRet = frtos_ioctl_uart4( ulRequest, pvValue );
-            break;
                         
         case fdNVM:
             xRet = frtos_ioctl_nvm( &xNVM, ulRequest, pvValue );
@@ -91,13 +82,9 @@ int16_t xRet = -1;
 	case fdTERM:
 		xRet = frtos_write_uart0( pvBuffer, xBytes );
 		break;
-
-    case fdRS485:
-		xRet = frtos_write_uart4( pvBuffer, xBytes );
-		break;
         
-    case fdRS485_MODBUS:
-		xRet = frtos_write_uart4_modbus( pvBuffer, xBytes );
+    case fdRS485:
+		xRet = frtos_write_uart4_rs485( pvBuffer, xBytes );
 		break;
 
     case fdNVM:
@@ -123,10 +110,6 @@ int16_t xRet = -1;
 		break;
 
     case fdRS485:
-		xRet = frtos_read_uart4( pvBuffer, xBytes );
-		break;
-
-    case fdRS485_MODBUS:
 		xRet = frtos_read_uart4( pvBuffer, xBytes );
 		break;
         
@@ -177,41 +160,7 @@ uint16_t i;
     return(xBytes);   
 }
 //------------------------------------------------------------------------------
-int16_t frtos_write_uart4( const char *pvBuffer, const uint16_t xBytes )
-{
-    
-uint16_t i;
-    
-    // RTS ON. Habilita el sentido de trasmision del chip.
-	SET_RTS_RS485();
-	vTaskDelay( ( TickType_t)( 5 ) );
-    
-    // Transmision x poleo ( No hablito al INT x DRIE )
-    //for( i = 0; i < strlen(pvBuffer); i++) {
-    for( i = 0; i < xBytes; i++) {
-        // Espero que el TXDATA reg. este vacio.
-        while( (USART4.STATUS & USART_DREIF_bm) == 0 )
-            ;
-        USART_PutChar(&USART4, pvBuffer[i]);
-    }
-    
-    // Espero que salga el ultimo byte
-    while( ( USART4.STATUS &  USART_TXCIF_bm) == 0 )
-            ;
-    // Borro la flag
-    USART4.STATUS |= ( 1 << USART_TXCIF_bp);
-    
-    // Para evitar el loopback del puerto RS485
-    frtos_ioctl( fdRS485, ioctl_UART_CLEAR_RX_BUFFER, NULL );
-    vTaskDelay( ( TickType_t)( 2 ) );
-    
-	// RTS OFF: Habilita la recepcion del chip
-	CLEAR_RTS_RS485();
-    vTaskDelay( ( TickType_t)( 1 ) );
-    return(xBytes);   
-}
-//------------------------------------------------------------------------------
-int16_t frtos_write_uart4_modbus( const char *pvBuffer, const uint16_t xBytes )
+int16_t frtos_write_uart4_rs485( const char *pvBuffer, const uint16_t xBytes )
 {
     // Hago control de flujo ya que el SP3485 debe operarse HALF-DUPLEX !!
 	// Trasmite el buffer sin considerar si tiene NULL 0x00 en el medio.
@@ -258,7 +207,7 @@ uint16_t i;
     
     taskEXIT_CRITICAL();
     // Para evitar el loopback del puerto RS485
-    frtos_ioctl( fdRS485_MODBUS, ioctl_UART_CLEAR_RX_BUFFER, NULL );
+    frtos_ioctl( fdRS485, ioctl_UART_CLEAR_RX_BUFFER, NULL );
     //vTaskDelay( ( TickType_t)( 2 ) );
 	// RTS OFF: Habilita la recepcion del chip
 	CLEAR_RTS_RS485();

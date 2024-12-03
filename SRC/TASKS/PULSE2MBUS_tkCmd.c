@@ -59,6 +59,58 @@ uint8_t c = 0;
  //   uxHighWaterMark = SPYuxTaskGetStackHighWaterMark( NULL );
  //   xprintf_P(PSTR("STACK::cmd_hwm 2 = %d\r\n"),uxHighWaterMark );
        
+    for(;;)
+    {
+        u_kick_wdt(TK_CMD);
+        while ( xgetc( (char *)&c ) == 1 ) {
+            FRTOS_CMD_process(c);
+        }
+        
+        if ( u_read_termsense() == 0 ) {
+            vTaskDelay( ( TickType_t)( 10 / portTICK_PERIOD_MS ) );
+        } else {
+            vTaskDelay( ( TickType_t)( 60000 / portTICK_PERIOD_MS ) );
+        }                    
+    }      
+}
+//------------------------------------------------------------------------------
+void __tkCmd(void * pvParameters)
+{
+
+	// Esta es la primer tarea que arranca.
+
+( void ) pvParameters;
+uint8_t c = 0;
+
+ //   uxHighWaterMark = SPYuxTaskGetStackHighWaterMark( NULL );
+    
+    while ( ! starting_flag )
+        vTaskDelay( ( TickType_t)( 100 / portTICK_PERIOD_MS ) );
+
+    // Marco la tarea activa
+    SYSTEM_ENTER_CRITICAL();
+    tk_running[TK_CMD] = true;
+    SYSTEM_EXIT_CRITICAL();
+             
+	//vTaskDelay( ( TickType_t)( 500 / portTICK_PERIOD_MS ) );
+
+ //   xprintf_P(PSTR("STACK::cmd_hwm 1 = %d\r\n"),uxHighWaterMark );
+
+    FRTOS_CMD_init();
+
+    FRTOS_CMD_register( "cls", cmdClsFunction );
+	FRTOS_CMD_register( "help", cmdHelpFunction );
+    FRTOS_CMD_register( "reset", cmdResetFunction );
+    FRTOS_CMD_register( "status", cmdStatusFunction );
+    FRTOS_CMD_register( "config", cmdConfigFunction );
+    FRTOS_CMD_register( "test", cmdTestFunction );
+    
+    xprintf_P(PSTR("Starting tkCmd..\r\n" ));
+    xprintf_P(PSTR("Spymovil %s %s %s %s \r\n") , HW_MODELO, FRTOS_VERSION, FW_REV, FW_DATE);
+      
+ //   uxHighWaterMark = SPYuxTaskGetStackHighWaterMark( NULL );
+ //   xprintf_P(PSTR("STACK::cmd_hwm 2 = %d\r\n"),uxHighWaterMark );
+       
     cmd_pwrmode = CMD_AWAKE;
     cmd_state_timer = CMD_TIMER_AWAKE;
 
@@ -115,6 +167,12 @@ static void cmdTestFunction(void)
 
     FRTOS_CMD_makeArgv();
 
+    // AWAKE
+    if (!strcmp_P( strupr(argv[1]), PSTR("AWAKE"))  ) {
+        xprintf_P(PSTR("AWAKE PIN=%d\r\n"), READ_AWAKE_SENSE());
+        return;
+    }
+    
     // TERMSENSE
     if (!strcmp_P( strupr(argv[1]), PSTR("TSENSE"))  ) {
         xprintf_P(PSTR("TERMSENSE=%d\r\n"), u_read_termsense());
@@ -126,7 +184,7 @@ static void cmdTestFunction(void)
         if (!strcmp_P( strupr(argv[2]), PSTR("WRITE"))  ) {
             //SET_RTS_RS485();
             vTaskDelay( ( TickType_t)( 5 ) );   
-            xfprintf_P( fdRS485_MODBUS, PSTR("The quick brown fox jumps over the lazy dog \r\n"));
+            xfprintf_P( fdRS485, PSTR("The quick brown fox jumps over the lazy dog \r\n"));
             vTaskDelay( ( TickType_t)( 2 ) );
             // RTS OFF: Habilita la recepcion del chip
             //CLEAR_RTS_RS485();
@@ -134,12 +192,15 @@ static void cmdTestFunction(void)
             return;
         }
         
-        /*
+        
         if (!strcmp_P( strupr(argv[2]), PSTR("READ"))  ) {
-            RS485_read_RXbuffer();
+            modbus_debug_read();
+            //modbus_slave_print_rx_buffer();
+            //xprintf_P(PSTR("COUNT=%d\r\n"), modbus_count());
+            pv_snprintfP_OK();
             return;
         }
-         */
+        
         
         pv_snprintfP_ERR();
         return;  
@@ -196,7 +257,7 @@ static void cmdHelpFunction(void)
     } else if (!strcmp_P( strupr(argv[1]), PSTR("TEST"))) {
 		xprintf_P( PSTR("-test\r\n"));
         xprintf_P( PSTR("  rts {on|off}\r\n"));
-        xprintf_P( PSTR("  cpin\r\n"));
+        xprintf_P( PSTR("  cpin, awake\r\n"));
         xprintf_P( PSTR("  rs485 write,read\r\n"));
         return;
         
@@ -242,9 +303,17 @@ static void cmdStatusFunction(void)
     xprintf_P(PSTR(" timerpoll=%d\r\n"), counter_conf.timerpoll);
     xprintf_P(PSTR(" magpp=%0.3f\r\n"), counter_conf.magpp);
     xprintf_P(PSTR(" modbus addr= 0x%02x\r\n"), systemConf.modbus_address);
+    if ( modbus_debug ) {
+        xprintf_P(PSTR(" modbus debug = TRUE\r\n"));
+    } else {
+        xprintf_P(PSTR(" modbus debug = FALSE\r\n"));
+    }
     
     u_print_tasks_running();
     u_print_watchdogs();
+    
+    xprintf_P(PSTR("Stats: ppm=%d, pph=%lu\r\n"), contador.pulsosXmin, contador.pulsosXhora);
+
 
 }
 //------------------------------------------------------------------------------
@@ -259,6 +328,7 @@ static void cmdConfigFunction(void)
         // addr 
         if ( strcmp_P ( strupr( argv[2]), PSTR("ADDRESS")) == 0 ) {
             systemConf.modbus_address = atoi(argv[3]);
+            mbus_local_address = systemConf.modbus_address;
             pv_snprintfP_OK();
             return;
         }

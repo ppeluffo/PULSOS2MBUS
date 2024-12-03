@@ -40,6 +40,8 @@ typedef struct {
 counter_conf_t counter_conf;
 
 typedef struct {
+    uint32_t pulsosXmin;
+    uint32_t pulsosXhora;
     uint16_t pulsos;
     float caudal;
     uint8_t fsm_ticks_count;
@@ -60,7 +62,8 @@ void counter_config_timerpoll( char *s_timerpoll);
 void counter_config_magpp( char *s_magpp);
 void counter_clear(void);
 uint8_t counter_read_pin(void);
-counter_value_t counter_read();
+void counter_read(counter_value_t *cnt);
+void counter_summarize(void);
 
 
 #ifdef	__cplusplus

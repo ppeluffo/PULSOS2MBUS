@@ -33,7 +33,6 @@ uint32_t ulNotificationValue;
     // modo.
     
     modbus_slave_fsm_init();
-    RS485_SLEEP();
     
     xprintf_P(PSTR("Starting tkRS485..\r\n" ));
     
@@ -43,19 +42,25 @@ uint32_t ulNotificationValue;
         
         u_kick_wdt(TK_RS485RX);
         
-        //while ( true ) {
-        while ( rs485_awake ) {
+        while ( true ) {
             c = '\0';	// Lo borro para que luego del un CR no resetee siempre el timer.
             // el read se bloquea 50ms. lo que genera la espera.
             while ( xfgetc( fdRS485, (char *)&c ) == 1 ) {
-                modbus_slave_fsm(c);
+               modbus_slave_fsm(c);
             }
         
-            //vTaskDelay( ( TickType_t)( 10 / portTICK_PERIOD_MS ) );
+            //vTaskDelay( ( TickType_t)( 10 / portTICK_PERIOD_MS ) );     
+            
+            if (rs485_awake) {
+                vTaskDelay( ( TickType_t)( 10 / portTICK_PERIOD_MS ) );
+            } else {
+                ulNotificationValue = ulTaskNotifyTake(pdTRUE, ( TickType_t)( 60000 / portTICK_PERIOD_MS ));
+                if( ( ulNotificationValue & 0x01 ) != 0 ) {
+                    xprintf_P(PSTR("AWAKE signal !!\r\n"));  
+                }           
+            }
+            
         }
-        
-        // Estoy en tickless
-        ulNotificationValue = ulTaskNotifyTake(pdTRUE, ( TickType_t)(60000 / portTICK_PERIOD_MS ));
 	}    
 }
 //------------------------------------------------------------------------------

@@ -36,6 +36,9 @@ void system_init()
     CONFIG_RTS_485();
     // RTS OFF: Habilita la recepcion del chip
 	CLEAR_RTS_RS485();
+    
+    //CONFIG_AWAKE_SENSE();
+    pin_awake_config();
 
 }
 //-----------------------------------------------------------------------------
@@ -83,7 +86,7 @@ void u_kick_wdt( t_wdg_ids wdg_id)
 void u_config_default( void )
 {
 
-    systemConf.modbus_address = 0x02;
+    systemConf.modbus_address = 100;
     counter_conf.magpp = 0.1;
     counter_conf.timerpoll = 60; 
 }
@@ -140,6 +143,8 @@ uint8_t rd_cks, calc_cks;
     systemConf.modbus_address = NVMBuffer.modbus_address;
     counter_conf.magpp = NVMBuffer.magpp;
     counter_conf.timerpoll = NVMBuffer.timerpoll;
+    
+    mbus_local_address = systemConf.modbus_address;
     
     return(true);
 }
@@ -216,7 +221,15 @@ void u_print_tasks_running(void)
     if ( tk_running[TK_RS485RX] ) {
         xprintf_P(PSTR(" rs485rx"));
     }
-       
+
+    if ( tk_running[TK_SYS] ) {
+        xprintf_P(PSTR(" sys"));
+    }
+
+    if ( tk_running[TK_LOG] ) {
+        xprintf_P(PSTR(" log"));
+    }
+    
     xprintf_P(PSTR("\r\n"));
     
 }
@@ -233,6 +246,14 @@ void u_print_watchdogs(void)
     if ( tk_watchdog[TK_RS485RX] ) {
         xprintf_P(PSTR(" rs485rx"));
     }
+
+    if ( tk_watchdog[TK_SYS] ) {
+        xprintf_P(PSTR(" sys"));
+    }
+    
+    if ( tk_watchdog[TK_LOG] ) {
+        xprintf_P(PSTR(" log"));
+    }
     
     xprintf_P(PSTR("\r\n"));
     
@@ -241,14 +262,26 @@ void u_print_watchdogs(void)
 void RS485_AWAKE(void)
 {
     
+    /*
+     * Si esta despierto no hago nada
+     */
     //taskENTER_CRITICAL();
-    rs485_awake = true;
+    if  ( rs485_awake ==  true ) {
+        return;
+        
+    } else {
+        rs485_awake = true;
+        // Despierto a la tarea.
+        //xTaskNotifyGive( xHandle_tkRS485RX );
+        xTaskNotify( xHandle_tkRS485RX,
+                       0x01,
+                       eSetBits);
+    
+        vTaskDelay( ( TickType_t)( 100 / portTICK_PERIOD_MS ) );
+    }
     //taskEXIT_CRITICAL();
     
-    // Despierto a la tarea.
-    xTaskNotifyGive( xHandle_tkRS485RX );
-    
-    vTaskDelay( ( TickType_t)( 100 / portTICK_PERIOD_MS ) );
+
     
 }
 //------------------------------------------------------------------------------
@@ -275,5 +308,55 @@ void u_config_termsense(void)
 uint8_t u_read_termsense(void)
 {
     return  ( ( TERM_SENSE_PORT.IN & TERM_SENSE_PIN_bm ) >> TERM_SENSE_PIN);
+}
+// -----------------------------------------------------------------------------
+void pin_awake_config(void)
+{
+    /*
+     * Configuramos el pin para que sea entrada e interumpa en c/flanco.
+     * 
+     */
+    
+    // Es una input
+    CONFIG_AWAKE_SENSE();
+    
+    // Habilito a interrumpir, pullup, flanco de bajada.
+    cli();
+    PORTC.PIN1CTRL |= PORT_PULLUPEN_bm | PORT_ISC_BOTHEDGES_gc;
+    sei();
+    
+}
+// -----------------------------------------------------------------------------
+#define PC1_INTERRUPT               ( PORTC.INTFLAGS & PIN1_bm )
+#define PC1_CLEAR_INTERRUPT_FLAG    ( PORTC.INTFLAGS &= PIN1_bm )
+
+
+ISR(PORTC_PORT_vect)
+{
+BaseType_t xHigherPriorityTaskWoken;
+
+    
+    // Borro las flags.
+    if (PC1_INTERRUPT) {
+        
+        // Si el pulso fue de subida
+        if ( READ_AWAKE_SENSE() == 1) {
+            if ( ! rs485_awake ) {
+                rs485_awake = true;
+                // Despierto a la tarea.
+                xHigherPriorityTaskWoken = pdFALSE;
+                xTaskNotifyFromISR( xHandle_tkRS485RX,0x01, eSetBits, &xHigherPriorityTaskWoken);
+            }
+            
+        } else {
+            // Fue de bajada
+            rs485_awake = false;
+        }
+                     
+        // Se borra la flag de interrupcion para habilitarla de nuevo
+        // Si no la borro antes de salir, se vuelve a generar la int.
+        PC1_CLEAR_INTERRUPT_FLAG;
+    }
+
 }
 // -----------------------------------------------------------------------------
