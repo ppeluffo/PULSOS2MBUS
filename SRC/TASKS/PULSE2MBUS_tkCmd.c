@@ -66,11 +66,15 @@ uint8_t c = 0;
             FRTOS_CMD_process(c);
         }
         
+        //vTaskDelay( ( TickType_t)( 60000 / portTICK_PERIOD_MS ) );
+        //vTaskDelay( ( TickType_t)( 10 / portTICK_PERIOD_MS ) );
+        
         if ( u_read_termsense() == 0 ) {
             vTaskDelay( ( TickType_t)( 10 / portTICK_PERIOD_MS ) );
         } else {
             vTaskDelay( ( TickType_t)( 60000 / portTICK_PERIOD_MS ) );
-        }                    
+        } 
+                           
     }      
 }
 //------------------------------------------------------------------------------

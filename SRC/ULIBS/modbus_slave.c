@@ -277,7 +277,7 @@ uint8_t i;
     
     //portENABLE_INTERRUPTS();
     
-    if (modbus_debug) {
+    //if (modbus_debug) {
         modbus_slave_print_rx_buffer();
         
         xprintf_P( PSTR("TXMT(%d):"), mbus_cb->tx_size);
@@ -286,7 +286,7 @@ uint8_t i;
 		}
 		xprintf_P( PSTR("\r\n"));
         
-    }
+    //}
 
 
 }

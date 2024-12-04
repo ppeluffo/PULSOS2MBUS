@@ -30,6 +30,7 @@ uint32_t ulNotificationValue;
         
         ulNotificationValue = ulTaskNotifyTake(pdTRUE, ( TickType_t)( 60000 / portTICK_PERIOD_MS ));
         if( ( ulNotificationValue ) != 0 ) {
+            
             xprintf_P(PSTR("COUNTER: PULSOS=%d, CAUDAL=%0.3f, PW(secs)=%0.3f\r\n"), contador.pulsos, contador.caudal, contador.T_secs );
             //xprintf_P(PSTR("COUNTER**: TNOW=%lu, PW(ticks)=%lu\r\n"),  contador.now_ticks,  contador.T_ticks );      
         }

@@ -54,7 +54,7 @@ void tkCtl(void * pvParameters)
 		vTaskDelay( ( TickType_t)( 1000 * TKCTL_DELAY_S / portTICK_PERIOD_MS ) );
         // Estoy en tickless
         //xnprintf( fdRS485, "Spymovil123\r\n", 13 );
-        sys_check_awake();
+        //sys_check_awake();
 	}
 }
 //------------------------------------------------------------------------------

@@ -330,7 +330,6 @@ void pin_awake_config(void)
 #define PC1_INTERRUPT               ( PORTC.INTFLAGS & PIN1_bm )
 #define PC1_CLEAR_INTERRUPT_FLAG    ( PORTC.INTFLAGS &= PIN1_bm )
 
-
 ISR(PORTC_PORT_vect)
 {
 BaseType_t xHigherPriorityTaskWoken;

@@ -49,7 +49,8 @@ uint32_t ulNotificationValue;
                modbus_slave_fsm(c);
             }
         
-            //vTaskDelay( ( TickType_t)( 10 / portTICK_PERIOD_MS ) );     
+            //vTaskDelay( ( TickType_t)( 60000 / portTICK_PERIOD_MS ) );     
+            
             
             if (rs485_awake) {
                 vTaskDelay( ( TickType_t)( 10 / portTICK_PERIOD_MS ) );
@@ -59,6 +60,7 @@ uint32_t ulNotificationValue;
                     xprintf_P(PSTR("AWAKE signal !!\r\n"));  
                 }           
             }
+            
             
         }
 	}    

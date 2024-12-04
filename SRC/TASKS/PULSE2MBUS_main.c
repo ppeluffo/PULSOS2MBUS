@@ -3,10 +3,12 @@
  * File:   spxR2_main.c
  * Author: pablo
  *
+ * 2024-12-03:
+ * Pongo tkCmd, tkRS485 a dormir
+ * 
  */
 
 #include "PULSE2MBUS.h"
-
 /*
 
 FUSES = {

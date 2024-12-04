@@ -1,17 +1,17 @@
 #include "contadores.h"
 #include <avr/interrupt.h>
 
-#define PF4_INTERRUPT               ( PORTF.INTFLAGS & PIN4_bm )
-#define PF4_CLEAR_INTERRUPT_FLAG    ( PORTF.INTFLAGS &= PIN4_bm )
+#define PF2_INTERRUPT               ( PORTF.INTFLAGS & PIN2_bm )
+#define PF2_CLEAR_INTERRUPT_FLAG    ( PORTF.INTFLAGS &= PIN2_bm )
 
 #define PE6_INTERRUPT               ( PORTE.INTFLAGS & PIN6_bm )
 #define PE6_CLEAR_INTERRUPT_FLAG    ( PORTE.INTFLAGS &= PIN6_bm )
 
 #define CNT0_PORT	PORTF
-#define CNT0_PIN    4   
-#define CNT0_PIN_bm	PIN4_bm
-#define CNT0_PIN_bp	PIN4_bp
-#define CNT0_PIN_CONFIG()           PORTF.PIN4CTRL |= PORT_PULLUPEN_bm | PORT_ISC_FALLING_gc;
+#define CNT0_PIN    2   
+#define CNT0_PIN_bm	PIN2_bm
+#define CNT0_PIN_bp	PIN2_bp
+#define CNT0_PIN_CONFIG()           PORTF.PIN2CTRL |= PORT_PULLUPEN_bm | PORT_ISC_FALLING_gc;
 
 void pv_count_pulse(void);
 
@@ -126,8 +126,8 @@ BaseType_t xHigherPriorityTaskWoken = pdTRUE;
     // Guardo el inicio del pulso para medir el caudal del proximo pulso
     contador.start_pulse_ticks = contador.now_ticks;
     
-    // No cuento pulsos menores de 100 ticks de ancho
-    if (contador.T_ticks < 10) {
+    // No cuento pulsos menores de 5 ticks de ancho (5ms)
+    if (contador.T_ticks < 5 ) {
         return;
     }
     
@@ -163,13 +163,13 @@ BaseType_t xHigherPriorityTaskWoken = pdTRUE;
 ISR(PORTF_PORT_vect)
 {
     // Borro las flags.
-    if (PF4_INTERRUPT) {
+    if (PF2_INTERRUPT) {
         //led_toggle();
         pv_count_pulse();
                     
         // Se borra la flag de interrupcion para habilitarla de nuevo
         // Si no la borro antes de salir, se vuelve a generar la int.
-        PF4_CLEAR_INTERRUPT_FLAG;
+        PF2_CLEAR_INTERRUPT_FLAG;
     }
 
 }
